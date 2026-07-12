@@ -9,8 +9,9 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 # 画面サイズの設定
 WIDTH, HEIGHT = 800, 600
  
-# キャラクター用のダミー画像（画像ファイルがない場合の代用）
-def get_dummy_surface(w, h, color):
+
+def get_dummy_surface(w: int, h: int, color: tuple) -> pg.Surface:
+    """キャラクター用のダミー画像（画像ファイルがない場合の代用）"""
     surface = pg.Surface((w, h))
     surface.fill(color)
     return surface
@@ -86,7 +87,7 @@ class PerspectiveBackground:
     def update(self):
         self.scroll_y += self.road_base_speed
 
-    def draw(self, screen, moon_radius):
+    def draw(self, screen: pg.Surface, moon_radius: int):
         # --- ① 宇宙（夜空と星）の描画 ---
         screen.fill((10, 10, 30)) 
         
@@ -138,7 +139,7 @@ class Player(pg.sprite.Sprite):
         self.rect.center = (WIDTH // 2, HEIGHT - 80)
         self.speed = 10
 
-    def update(self, key_lst):
+    def update(self, key_lst: list):
         if key_lst[pg.K_LEFT]: self.rect.x -= self.speed
         if key_lst[pg.K_RIGHT]: self.rect.x += self.speed
         
