@@ -23,8 +23,7 @@ class PerspectiveBackground:
         self.road_base_speed = 4  # 虹の道の基本スクロール速度
 
         self.cx = WIDTH // 2
-        self.cy = HEIGHT // 2 + 80  # ★前より80px下に下げてプレイヤーに近づけました
-        self.horizon_y = self.cy     # 地平線のy座標も同期
+        self.cy = HEIGHT // 2 + 80  
         
         # 星の初期設定（中心を下げたので、新しい中心から放射状に広がる）
         self.stars = []
@@ -112,12 +111,55 @@ class Player(pg.sprite.Sprite):
 
 
 class Grandmother(pg.sprite.Sprite):
-    """【修正】おじいさんが投げるおばあさん（奥行きへ進むプレイヤー弾）"""
+   #言弾として吹き出す文字画像リスト
+    word_list = ["だめ.png", "月に.png", "戻ら.png", "ないで.png", "おいて.png", "行か.png", "ないで.png", "帰ら.png", "ないで.png", "止まって.png", "待って.png", "お願い.png"]
+    #言弾として吹き出すときの音声
+    voice_list = ["だめ.wav", "月に.wav", "戻ら.wav", "ないでよ.wav", "おいて.wav", "行か.wav", "ないで.wav", "帰ら.wav", "ないでよ.wav", "止まって.wav", "待って.wav", "お願い.wav"]
+    next_index = 0
+
     def __init__(self, player_center):
         super().__init__()
-        # 初期サイズは24x24（手前）
-        self.base_size = 24
-        self.image = get_dummy_surface(self.base_size, self.base_size, (255, 255, 0))
+        # 初期サイズ
+        self.base_size = 80
+        # 画像と音声ファイルのロードを試みる
+        self.raw_image = None
+        self.sound = None
+
+        #画像ファイル名と音声ファイル名をリストから取得
+        if Grandmother.next_index >= len(Grandmother.word_list):
+            Grandmother.next_index = 0
+        index = Grandmother.next_index
+        Grandmother.next_index += 1
+
+        word = Grandmother.word_list[index]
+        voice = Grandmother.voice_list[index]
+
+        # 画像ファイルを探す
+        for path in (word, os.path.join("img", word)):
+            if os.path.exists(path):
+                try:
+                    self.raw_image = pg.image.load(path).convert_alpha()
+                    break
+                except Exception:
+                    self.raw_image = None
+
+        # 音声ファイルを探す
+        for path in (voice, os.path.join("voice", voice)):
+            if os.path.exists(path):
+                try:
+                    self.sound = pg.mixer.Sound(path)
+                    self.sound.play()
+                    break
+                except Exception:
+                    self.sound = None
+
+        if self.raw_image is None:
+            surf = pg.Surface((self.base_size, self.base_size), pg.SRCALPHA)
+            pg.draw.circle(surf, (255, 255, 0, 255), (self.base_size // 2, self.base_size // 2), self.base_size // 2)
+            self.image = surf
+        else:
+            self.image = pg.transform.smoothscale(self.raw_image, (self.base_size, self.base_size))
+
         self.rect = self.image.get_rect()
         self.rect.center = player_center
         
@@ -147,10 +189,28 @@ class Grandmother(pg.sprite.Sprite):
         
         # 奥に行くほどサイズを小さくする（最小でも元の40%の大きさに）
         scale = max(0.4, t)
-        new_size = int(self.base_size * scale)
-        
-        # 画像と判定範囲（rect）のサイズ・位置を更新
-        self.image = pg.transform.scale(get_dummy_surface(self.base_size, self.base_size, (255, 255, 0)), (new_size, new_size))
+        new_size = max(1, int(self.base_size * scale))
+
+        # 画像をスケールして丸くマスク（透過）する
+        if self.raw_image is not None:
+            try:
+                scaled = pg.transform.smoothscale(self.raw_image, (new_size, new_size))
+                # マスク: 中心が白(255)で外側が透明(0)のサーフェス
+                mask = pg.Surface((new_size, new_size), pg.SRCALPHA)
+                mask.fill((255, 255, 255, 0))
+                pg.draw.circle(mask, (255, 255, 255, 255), (new_size // 2, new_size // 2), new_size // 2)
+                # アルファを掛けて丸くする
+                scaled.blit(mask, (0, 0), special_flags=pg.BLEND_RGBA_MULT)
+                self.image = scaled
+            except Exception:
+                surf = pg.Surface((new_size, new_size), pg.SRCALPHA)
+                pg.draw.circle(surf, (255, 255, 0, 255), (new_size // 2, new_size // 2), new_size // 2)
+                self.image = surf
+        else:
+            surf = pg.Surface((new_size, new_size), pg.SRCALPHA)
+            pg.draw.circle(surf, (255, 255, 0, 255), (new_size // 2, new_size // 2), new_size // 2)
+            self.image = surf
+
         self.rect = self.image.get_rect()
         self.rect.center = (int(self.ex), int(self.ey))
         
@@ -197,12 +257,21 @@ def main():
     kaguya = Kaguya()
     grannies = pg.sprite.Group()
 
+    # BGM を初期化して再生
+    try:
+        pg.mixer.init()
+        pg.mixer.music.load("BGM/Back To The Moon.mp3")
+        pg.mixer.music.set_volume(0.4)
+        pg.mixer.music.play(-1)
+    except Exception:
+        print("BGMを再生できませんでした。ファイルパスやサウンド設定を確認してください。")
+
     moon_radius = 20  
     tmr = 0
 
     while True:
         background.update()
-        
+
         if tmr % 3 == 0 and moon_radius < 400:
             moon_radius += 1
             
@@ -224,11 +293,15 @@ def main():
 
         if pg.sprite.spritecollide(kaguya, grannies, True):
             print("【ゲームクリア】かぐや姫を引き留めました！")
+            #かぐや姫に引き留めたときBGM停止
+            pg.mixer.music.stop()
             pg.quit()
             sys.exit()
 
         if moon_radius >= 350:
             print("【ゲームオーバー】かぐや姫は月へ帰ってしまいました。")
+            #かぐや姫に月に帰ったときBGM停止
+            pg.mixer.music.stop()
             pg.quit()
             sys.exit()
 
