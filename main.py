@@ -94,16 +94,42 @@ class PerspectiveBackground:
             if (y + scroll_offset) % int(30 * (1.0 + t)) < 2:
                  pg.draw.line(screen, (50, 50, 50), (road_left, y), (road_left + current_road_width, y), 1)
 
+
 class Player(pg.sprite.Sprite):
-    """プレイヤー（おじいさん）"""
+    """プレイヤー（おじいさん / おばあさん）"""
     def __init__(self):
         super().__init__()
-        self.image = get_dummy_surface(60, 60, (0, 255, 0))
+        
+        # キャラクターごとの性能パラメータ (色, 足の速さ)
+        self.features = {
+            "ojiisan": {"color": (0, 255, 0), "speed": 10},     # おじいさん: 緑色、速度10
+            "obaasan": {"color": (255, 105, 180), "speed": 15}  # おばあさん: ピンク、速度15（足が速い）
+        }
+        self.current_char = "ojiisan"  # 初期キャラはおじいさん
+        
+        # 選択されたキャラクターの見た目と速度を適用
+        self.apply_character()
+        
         self.rect = self.image.get_rect()
         self.rect.center = (WIDTH // 2, HEIGHT - 80)
-        self.speed = 10
+
+    def apply_character(self):
+        """現在のキャラクター設定に合わせて画像と速度を更新する"""
+        data = self.features[self.current_char]
+        self.image = get_dummy_surface(60, 60, data["color"])
+        self.speed = data["speed"]
+
+    def switch_character(self):
+        """Sキー入力で操作キャラクターを交互に切り替える"""
+        if self.current_char == "ojiisan":
+            self.current_char = "obaasan"
+        else:
+            self.current_char = "ojiisan"
+        
+        self.apply_character()
 
     def update(self, key_lst):
+        # 左右の移動速度(self.speed)はキャラクターごとに変化します
         if key_lst[pg.K_LEFT]: self.rect.x -= self.speed
         if key_lst[pg.K_RIGHT]: self.rect.x += self.speed
         
@@ -111,13 +137,13 @@ class Player(pg.sprite.Sprite):
         if self.rect.right > 700: self.rect.right = 700
 
 
-class Grandmother(pg.sprite.Sprite):
-    """【修正】おじいさんが投げるおばあさん（奥行きへ進むプレイヤー弾）"""
-    def __init__(self, player_center):
+class Kotodama(pg.sprite.Sprite):
+    """プレイヤーが発射する言弾（奥行きへ進むプレイヤー弾）"""
+    def __init__(self, player_center, color):
         super().__init__()
-        # 初期サイズは24x24（手前）
         self.base_size = 24
-        self.image = get_dummy_surface(self.base_size, self.base_size, (255, 255, 0))
+        self.color = color  # 発射したキャラクターの色を引き継ぐ
+        self.image = get_dummy_surface(self.base_size, self.base_size, self.color)
         self.rect = self.image.get_rect()
         self.rect.center = player_center
         
@@ -150,7 +176,7 @@ class Grandmother(pg.sprite.Sprite):
         new_size = int(self.base_size * scale)
         
         # 画像と判定範囲（rect）のサイズ・位置を更新
-        self.image = pg.transform.scale(get_dummy_surface(self.base_size, self.base_size, (255, 255, 0)), (new_size, new_size))
+        self.image = pg.transform.scale(get_dummy_surface(self.base_size, self.base_size, self.color), (new_size, new_size))
         self.rect = self.image.get_rect()
         self.rect.center = (int(self.ex), int(self.ey))
         
@@ -195,7 +221,7 @@ def main():
 
     player = Player()
     kaguya = Kaguya()
-    grannies = pg.sprite.Group()
+    kotodamas = pg.sprite.Group()  # 弾のグループ名を言弾(kotodamas)に統一
 
     moon_radius = 20  
     tmr = 0
@@ -214,15 +240,21 @@ def main():
                 sys.exit()
             
             if event.type == pg.KEYDOWN:
+                # 【なかむらさん担当】Sキーが押されたら操作キャラクターを変更
+                if event.key == pg.K_s:
+                    player.switch_character()
+
+                # スペースキーが押されたら、現在のキャラクターの色に応じた言弾を発射
                 if event.key == pg.K_SPACE:
-                    grannies.add(Grandmother(player.rect.center))
+                    current_color = player.features[player.current_char]["color"]
+                    kotodamas.add(Kotodama(player.rect.center, current_color))
 
         key_lst = pg.key.get_pressed()
         player.update(key_lst)
         kaguya.update()
-        grannies.update() 
+        kotodamas.update() 
 
-        if pg.sprite.spritecollide(kaguya, grannies, True):
+        if pg.sprite.spritecollide(kaguya, kotodamas, True):
             print("【ゲームクリア】かぐや姫を引き留めました！")
             pg.quit()
             sys.exit()
@@ -232,7 +264,7 @@ def main():
             pg.quit()
             sys.exit()
 
-        grannies.draw(screen)  
+        kotodamas.draw(screen)  
         screen.blit(kaguya.image, kaguya.rect)
         screen.blit(player.image, player.rect)
 
