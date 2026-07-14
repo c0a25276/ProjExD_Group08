@@ -482,7 +482,7 @@ class Meteor(pg.sprite.Sprite):
 
 def main():
     pg.init()
-    pg.display.set_caption("かぐや姫 引き留めろ！（オール奥行きVer）")
+    pg.display.set_caption("Back to the Moon")
     screen = pg.display.set_mode((WIDTH, HEIGHT))
     clock = pg.time.Clock()
 
