@@ -3,6 +3,7 @@ import sys
 import math
 import random
 import pygame as pg
+import random
 
 # 授業の指定通り、実行スクリプトのディレクトリに移動
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -138,15 +139,16 @@ class Player(pg.sprite.Sprite):
     """プレイヤー（おじいさん）"""
     def __init__(self):
         super().__init__()
-
-        self.normal_image = get_dummy_surface(60, 60, (0, 255, 0))
-        self.stun_image = get_dummy_surface(60, 60, (120, 120, 120))
+        self.normal_image = pg.image.load("fig/grandfather.png").convert_alpha()
+        self.normal_image = pg.transform.scale(self.nomal_image, (60, 60))
+        
+        self.stun_image = self.normal_image.copy()
+        self.stun_image.fill((255, 100, 100), special_flags=pg.BLEND_MULT)
 
         self.image = self.normal_image
         self.rect = self.image.get_rect()
-        self.rect.center = (WIDTH // 2, HEIGHT - 80)
-
-        self.speed = 10
+        self.rect.center = (WIDTH // 2, (HEIGHT - 80))
+        self.speed = 20
 
         # ★ろっく担当：スタン時間を管理する変数
         self.stun_timer = 0
@@ -287,13 +289,14 @@ class Kaguya(pg.sprite.Sprite):
     """かぐや姫"""
     def __init__(self):
         super().__init__()
-        self.base_size = 30  # 元の基本サイズ
-        self.size_modifier = 1.0
-        self.image = get_dummy_surface(30, 30, (255, 120, 180))
-        self.rect = self.image.get_rect()
-        self.vx = 4
-        self.target_y = (HEIGHT // 2) + 20
+        self.original_image = pg.image.load("fig/kaguya.png").convert_alpha()
+        self.rect = self.original_image.get_rect()
+        self.vx = 6 
+        self.target_y = (HEIGHT // 2) + 60
         self.rect.center = (WIDTH // 2, HEIGHT - 200)
+        self.base_size = 20
+        self.size_modifier = 1.0
+        self.image = pg.transform.scale(self.original_image, (self.base_size, self.base_size))
 
     def change_size(self, multiplier: float) -> None:
         """
@@ -304,24 +307,51 @@ class Kaguya(pg.sprite.Sprite):
 
     def update(self):
         self.rect.x += self.vx
-
-        if self.rect.y > self.target_y:
-            self.rect.y -= 1
+        if random.random() < 0.02:
+            # スピードをランダムに変化させる
+            self.vx = random.randint(2, 6)
 
         scale = max(0.4, (self.rect.y - (HEIGHT // 2)) / (HEIGHT - (HEIGHT // 2) - 200))
-        # 修正：奥行きのスケールに、サイズ倍率（size_modifier）を掛け合わせる
+        # 奥行きのスケールに、サイズ倍率（size_modifier）を掛け合わせる
         new_size = int(self.base_size * scale * self.size_modifier)
         # new_size = int(30 * scale)
         if new_size > 5:
-            self.image = pg.transform.scale(
-                get_dummy_surface(30, 30, (255, 120, 180)),
-                (new_size, new_size)
-            )
+            self.image = pg.transform.scale(self.original_image, (new_size, new_size))
             self.rect = self.image.get_rect(center=self.rect.center)
 
-        if self.rect.left < 320 or self.rect.right > 480:
+        if self.rect.left < 320 or self.rect.right > 460:
             self.vx *= -1
 
+class StoryDisplay:
+    """画面左上に物語のあらすじを流すクラス"""
+    def __init__(self):
+        self.texts = [
+            "Kaguya is about to go back to the moon.",
+            "Grandfather must stop Kaguya from leaving Earth.",
+            "Finish this game before the moon comes!",
+            "左右キー:移動、スペース:射撃"
+        ]
+        self.font = pg.font.SysFont("ms-gothic", 24)
+        self.color = (255, 255, 255)
+
+        self.line_idx = 0
+        self.char_count = 0
+        self.timer = 0
+
+    def update(self):
+        if self.timer % 5 == 0: 
+            if self.line_idx < len(self.texts):
+                if self.char_count < len(self.texts[self.line_idx]):
+                    self.char_count += 1
+                elif self.line_idx < len(self.texts) - 1:
+                    self.line_idx += 1
+                    self.char_count = 0
+        self.timer += 1
+    def draw(self, screen):
+        for i in range(self.line_idx + 1):
+            limit = self.char_count if i == self.line_idx else len(self.texts[i])
+            text_surf = self.font.render(self.texts[i][:limit], True, self.color)
+            screen.blit(text_surf, (20, 20 + i * 30))
 
 class Meteor(pg.sprite.Sprite):
     """★ろっく担当：落ちてくる隕石"""
@@ -399,7 +429,6 @@ class Meteor(pg.sprite.Sprite):
         if self.rect.top > HEIGHT or self.rect.right < 0 or self.rect.left > WIDTH:
             self.kill()
 
-
 def main():
     pg.init()
     pg.display.set_caption("かぐや姫 引き留めろ！（オール奥行きVer）")
@@ -407,6 +436,7 @@ def main():
     clock = pg.time.Clock()
 
     background = PerspectiveBackground()
+    story = StoryDisplay()
 
     player = Player()
     kaguya = Kaguya()
@@ -442,6 +472,9 @@ def main():
 
         background.draw(screen, moon_radius)
         draw_moon_progress_bar(screen, moon_radius, first_moon_radius, end_moon_radius)
+
+        story.update() #あらすじを更新
+        story.draw(screen)
 
         for event in pg.event.get():
             if event.type == pg.QUIT:
